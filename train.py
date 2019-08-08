@@ -22,8 +22,8 @@ def do_epoch(phase, net, device, loader, epoch, optimizer):
     total_imgs = len(loader.dataset)
     tqdm_iter = tqdm(total=total_iter, desc=desc, ncols=100, leave=False)
     for i, (names, images, labels) in enumerate(loader):
-        images = Variable(images.to(device))
-        labels = Variable(labels.to(device))
+        images = images.to(device)
+        labels = labels.to(device)
 
         # Reset gradients
         if optimizer:
@@ -38,9 +38,9 @@ def do_epoch(phase, net, device, loader, epoch, optimizer):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="PyTorch implementation of CAMs-with-size")
-    parser.add_argument('--data_root', type=str, default='')
-    parser.add_argument('--train_list', type=str, default='')
-    parser.add_argument('--val_list', type=str, default='')
+    parser.add_argument('--data_root', type=str, default='/data/cz/dataset/prostate_MR/DL_Image')
+    parser.add_argument('--train_list', type=str, default='prostate_MR/train_all_img.txt')
+    parser.add_argument('--val_list', type=str, default='prostate_MR/val_all_img.txt')
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--network', type=str, default='resnet_50', help='')
     parser.add_argument('--resume', type=str, default="", help="For training from one checkpoint")
@@ -95,7 +95,7 @@ if __name__ == '__main__':
     # train and val
     for i in range(args.num_epochs):
         # train and val alternatively
-        do_epoch()
+        do_epoch(phase='train', net=net, device=device, loader=train_loader, epoch=i, optimizer=optimizer_ft)
 
 
 
