@@ -3,6 +3,7 @@ import math
 import torch.utils.model_zoo as model_zoo
 from torchvision.models import ResNet
 import torch
+import torch.nn.functional as F
 
 __all__ = ['Net', 'resnet_18', 'resnet_34', 'resnet_50', 'resnet_101', 'resnet_152']
 
@@ -100,7 +101,9 @@ class Net(nn.Module):
         self.layer3 = self._make_layer(block, 256, layer_num[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layer_num[3], stride=2)
         self.globalAvgPool = nn.AdaptiveAvgPool2d(1)
+        self.globalMaxPool = nn.AdaptiveMaxPool2d(1)
         self.fc_cz = nn.Linear(512 * block.expansion, num_classes)
+        self.class_num = num_classes
 
         """initializing the model weights"""
         for m in self.modules():
@@ -156,12 +159,21 @@ class Net(nn.Module):
         x = self.layer4(x)
         # conv5_3_3 = self.layer4[2].conv3(x)
         conv5_3_3 = x
+        bz, nc, h, w = conv5_3_3.shape
 
         x = self.globalAvgPool(x)
         x = x.view(x.size(0), -1)
         x = self.fc_cz(x)
-
-        return x, conv5_3_3
+        cams = [torch.mm(self.fc_cz.weight[0].unsqueeze(0), conv5_3_3[batch_id].view(nc, h * w)).view(-1)
+                for batch_id in range(x.shape[0])]
+        cams = torch.cat(cams, dim=0).view(bz, self.class_num, h, w)
+        cams_min = [torch.min(cams[batch_id][0]).view(1, 1, 1, 1) for batch_id in range(x.shape[0])]
+        cams_min = torch.cat(cams_min, 0)
+        cams_max = self.globalMaxPool(cams)
+        cams = (cams - cams_min) / (cams_max - cams_min)
+        cams = F.interpolate(cams, scale_factor=32, mode='bilinear', align_corners=True)
+        # cams = torch.nn.Upsample(scale_factor=32, mode='bilinear')(cams)
+        return x, conv5_3_3, cams
 
 
 def resnet_18(pretrained=False, **kwargs):
@@ -185,7 +197,7 @@ def resnet_50(pretrained=False, **kwargs):
     #     model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
     if pretrained:
         model_dict = model.state_dict()
-        checkpoint = torch.load('resnet50-19c8e357.pth')
+        checkpoint = torch.load('pretrained/resnet50-19c8e357.pth')
         # 1. filter out unnecessary keys
         base_dict = {'.'.join(k.split('.')[0:]): v for k, v in list(checkpoint.items()) if k in model_dict}
         # 2. overwrite entries in the existing state dict
@@ -209,7 +221,7 @@ def resnet_152(pretrained=True, **kwargs):
     model = Net(Bottleneck, [3, 8, 36, 3], **kwargs)
     if pretrained:
         model_dict = model.state_dict()
-        checkpoint = torch.load('resnet152-b121ed2d.pth')
+        checkpoint = torch.load('pretrained/resnet152-b121ed2d.pth')
         # 1. filter out unnecessary keys
         base_dict = {'.'.join(k.split('.')[0:]): v for k, v in list(checkpoint.items()) if k in model_dict}
         # 2. overwrite entries in the existing state dict

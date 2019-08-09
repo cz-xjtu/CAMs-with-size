@@ -512,3 +512,46 @@ class PathakUpper(CrossEntropy):
                 plt.show()
 
             return u
+
+
+class SizeConstraintLoss():
+    def __init__(self, **kwargs):
+        self.idc: List[int] = kwargs["idc"]
+        self.C = len(self.idc)
+        self.bound: Tensor = torch.zeros((self.C, 2), dtype=torch.float32)
+        for i, (low, high) in kwargs['values'].items():
+            self.bound[i, 0] = low
+            self.bound[i, 1] = high
+        print(f"Initialized {self.__class__.__name__} with {kwargs}")
+
+        # self.__fn__ = getattr(__import__('utils'), kwargs['fn'])
+
+    def __call__(self, probs, labels):
+        # assert simplex(probs) and simplex(target)
+        # assert probs.shape == target.shape
+
+        b, _, w, h = probs.shape
+        bounds =[]
+        for _ in range(b):
+            bounds.append(self.bound.unsqueeze(0))
+        bounds = torch.cat(bounds, 0).to(probs.device)
+        bounds = torch.einsum("bci,bc->bci", (bounds, labels))
+        # k = bounds.shape[2]  # scalar or vector
+        value: Tensor = torch.einsum("bcwh->bc", probs[:, self.idc, ...])
+        lower_b = bounds[:, self.idc, 0].to(probs.device)
+        upper_b = bounds[:, self.idc, 1].to(probs.device)
+
+        # assert value.shape == (b, self.C, k), value.shape
+        # assert lower_b.shape == upper_b.shape == (b, self.C, k), lower_b.shape
+
+        too_big: Tensor = (value > upper_b).type(torch.float32)
+        too_small: Tensor = (value < lower_b).type(torch.float32)
+
+        big_pen: Tensor = (value - upper_b) ** 2
+        small_pen: Tensor = (value - lower_b) ** 2
+
+        res = too_big * big_pen + too_small * small_pen
+
+        loss: Tensor = res / (w * h)
+
+        return loss.mean()
