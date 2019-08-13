@@ -204,9 +204,9 @@ def resnet_50(pretrained=False, **kwargs):
         model_dict.update(base_dict)
         # 2. overwrite entries in the existing state dict
         model.load_state_dict(model_dict)
-        for k, v in model.named_parameters():
+        '''for k, v in model.named_parameters():
             if k != 'fc_cz.weight' or k != 'fc_cz.bias':
-                v.requires_grad = False
+                v.requires_grad = False'''
     return model
 
 
