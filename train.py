@@ -21,7 +21,7 @@ def calculate_hit(pred, gt):
     return hits
 
 
-def do_epoch(phase, net, device, loader, epoch, optimizer=None):
+def do_epoch(phase, net, device, loader, epoch, weight, optimizer=None):
     if phase == 'train':
         net.train()
         desc = f">> Training ({epoch})"
@@ -33,6 +33,8 @@ def do_epoch(phase, net, device, loader, epoch, optimizer=None):
     total_imgs = len(loader.dataset)
     epoch_hit = 0.
     current_loss = 0.
+    current_acc = 0.
+    current_imgs = 0.
     tqdm_iter = tqdm(total=total_iter, desc=desc, ncols=140, leave=False)
     for i, (names, images, labels) in enumerate(loader):
         images = images.to(device)
@@ -59,7 +61,8 @@ def do_epoch(phase, net, device, loader, epoch, optimizer=None):
         # compute loss
         loss_ce = bce_loss(pred_logits, labels)
         loss_size = size_loss(pred_cams, labels)
-        loss = loss_ce + 0.01 * loss_size
+        # loss = loss_ce + 0.01 * loss_size
+        loss = loss_ce + weight * loss_size if args.constraint else loss_ce
         # loss = loss_ce
         current_loss += loss.item()
 
@@ -72,8 +75,10 @@ def do_epoch(phase, net, device, loader, epoch, optimizer=None):
         batch_size = images.shape[0]
         batch_hits = calculate_hit(pred_logits.detach().cpu().numpy(), labels.detach().cpu().numpy())
         epoch_hit += batch_hits
-        current_acc = epoch_hit.__float__() / ((i+1) * batch_size)
+        current_imgs += images.shape[0]
+        current_acc = epoch_hit / current_imgs
         current_loss = current_loss / (i+1)
+        # current_loss = loss.item()
 
         # logging
 
@@ -98,10 +103,15 @@ if __name__ == '__main__':
     parser.add_argument('--resume', type=str, default="", help="For training from one checkpoint")
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--num_class', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=1e-3)
+    parser.add_argument('--weight', type=float, default=1e-3, help="weight for size loss, 0.001 is better so far")
+    parser.add_argument('--lr', type=float, default=1e-3, help="0.001 is better so far")
     parser.add_argument('--gpu_ids', type=list, default=[1])
     parser.add_argument('--print_freq', type=int, default=10)
     parser.add_argument('--model_save_path', type=str, default="res50_model/constraint")
+    parser.add_argument('--pretrained', action='store_true', default=False,
+                        help="if use pretrained weights from nature image")
+    parser.add_argument('--constraint', action='store_true', default=False,
+                        help="if use size constraint")
     args = parser.parse_args()
 
     # setting up the network
@@ -123,7 +133,8 @@ if __name__ == '__main__':
         print(f'>> Restored weights from {args.resume} successfully.')
     else:
         net_class = getattr(resnet, args.network)
-        net = net_class(num_classes=args.num_class)
+        net = net_class(num_classes=args.num_class, pretrained=args.pretrained)
+        print("use pretrained!") if args.pretrained else "don't use pretrained"
         # multi-gpu
         if len(args.gpu_ids) > 1:
             net.to(device)
@@ -149,9 +160,10 @@ if __name__ == '__main__':
     # train and val
     for i in range(args.num_epochs):
         # train and val alternatively
-        do_epoch(phase='train', net=net, device=device, loader=train_loader, epoch=i, optimizer=optimizer_ft)
+        do_epoch(phase='train', net=net, device=device, loader=train_loader, epoch=i, optimizer=optimizer_ft,
+                 weight=args.weight)
         with torch.no_grad():
-            do_epoch(phase='val', net=net, device=device, loader=val_loader, epoch=i)
+            do_epoch(phase='val', net=net, device=device, loader=val_loader, epoch=i, weight=args.weight)
         torch.save(net, os.path.join(args.model_save_path, "best.pkl"))
 
     print('Bingo!')
