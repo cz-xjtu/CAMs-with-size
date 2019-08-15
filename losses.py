@@ -519,9 +519,12 @@ class SizeConstraintLoss():
         self.idc: List[int] = kwargs["idc"]
         self.C = len(self.idc)
         self.bound: Tensor = torch.zeros((self.C, 2), dtype=torch.float32)
+        self.bound_bg: Tensor = torch.zeros((self.C, 2), dtype=torch.float32)
         for i, (low, high) in kwargs['values'].items():
             self.bound[i, 0] = low
             self.bound[i, 1] = high
+            self.bound_bg[i, 0] = 0
+            self.bound_bg[i, 1] = 262144
         print(f"Initialized {self.__class__.__name__} with {kwargs}")
 
         # self.__fn__ = getattr(__import__('utils'), kwargs['fn'])
@@ -531,11 +534,17 @@ class SizeConstraintLoss():
         # assert probs.shape == target.shape
 
         b, _, w, h = probs.shape
-        bounds =[]
+        bounds = []
+        bounds_bg = []
         for _ in range(b):
             bounds.append(self.bound.unsqueeze(0))
+            bounds_bg.append(self.bound_bg.unsqueeze(0))
         bounds = torch.cat(bounds, 0).to(probs.device)
+        bounds_bg = torch.cat(bounds_bg, 0).to(probs.device)
         bounds = torch.einsum("bci,bc->bci", (bounds, labels))
+        bounds_bg = torch.einsum("bci,bc->bci", (bounds_bg, 1 - labels))
+        bounds = torch.max(bounds, bounds_bg)
+
         # k = bounds.shape[2]  # scalar or vector
         value: Tensor = torch.einsum("bcwh->bc", probs[:, self.idc, ...])
         lower_b = bounds[:, self.idc, 0].to(probs.device)
