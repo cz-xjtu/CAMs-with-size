@@ -8,7 +8,7 @@ import cv2
 import os
 
 
-def infer_cam(args, model):
+def infer_cam(args, model, device):
     # use gpu or not
     use_gpu = torch.cuda.is_available()
     print("use_gpu:{}".format(use_gpu))
@@ -28,7 +28,7 @@ def infer_cam(args, model):
         label = labels[0]
         # wrap them in Variable
         if use_gpu:
-            inputs = inputs.cuda()
+            inputs = inputs.to(device)
         else:
             inputs = inputs
         # label = label[0]
@@ -83,23 +83,24 @@ def infer_cam(args, model):
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="PyTorch implementation of CAMs-with-size")
-    parser.add_argument('--data_root', type=str, default='/data/CZ/data/prostate_MR/DL_Image')
+    parser.add_argument('--data_root', type=str, default='/data/cz/dataset/prostate_MR/DL_Image')
     parser.add_argument('--train_list', type=str, default='prostate_MR/train_all_img.txt')
-    parser.add_argument('--val_list', type=str, default='prostate_MR/val_all_img.txt')
+    parser.add_argument('--val_list', type=str, default='prostate_MR/train_all_img.txt')
     parser.add_argument('--batch_size', type=int, default=2)
     parser.add_argument('--network', type=str, default='resnet_50', help='')
-    parser.add_argument('--resume', type=str, default="res50_model/constraint/best.pkl", help="For training from one checkpoint")
+    parser.add_argument('--resume', type=str, default="res50_model/constraint_wait_1e-3/best.pkl", help="For training from one checkpoint")
     parser.add_argument('--num_epochs', type=int, default=200)
     parser.add_argument('--num_class', type=int, default=1)
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--gpu_ids', type=list, default=[1])
     parser.add_argument('--print_freq', type=int, default=10)
     parser.add_argument('--model_save_path', type=str, default="res50_model/")
-    parser.add_argument('--save_root', type=str, default="res50_cams_constraint/", help="path for saving cams")
+    parser.add_argument('--save_root', type=str, default="cams/constraint_wait_1e-3/", help="path for saving cams")
     args = parser.parse_args()
 
     net = torch.load(args.resume)
     net.eval()
-    net.cuda()
+    device = torch.device('cuda:{}'.format(args.gpu_ids[0]))
+    net.to(device)
 
-    infer_cam(args, net)
+    infer_cam(args, net, device)

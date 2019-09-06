@@ -60,7 +60,7 @@ class Bottleneck(nn.Module):
         self.conv3 = nn.Conv2d(out_planes, out_planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm2d(out_planes * 4)
         self.relu = nn.ReLU(inplace=True)
-        self.sigmoid = nn.Sigmoid()
+        # self.sigmoid = nn.Sigmoid()
         self.downsample = downsample
         self.stride = stride
 
@@ -104,6 +104,7 @@ class Net(nn.Module):
         self.globalMaxPool = nn.AdaptiveMaxPool2d(1)
         self.fc_cz = nn.Linear(512 * block.expansion, num_classes)
         self.class_num = num_classes
+        self.sigmoid = nn.Sigmoid()
 
         """initializing the model weights"""
         for m in self.modules():
@@ -157,6 +158,7 @@ class Net(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        x = self.sigmoid(x)
         # conv5_3_3 = self.layer4[2].conv3(x)
         conv5_3_3 = x
         bz, nc, h, w = conv5_3_3.shape
@@ -167,10 +169,11 @@ class Net(nn.Module):
         cams = [torch.mm(self.fc_cz.weight[0].unsqueeze(0), conv5_3_3[batch_id].view(nc, h * w)).view(-1)
                 for batch_id in range(x.shape[0])]
         cams = torch.cat(cams, dim=0).view(bz, self.class_num, h, w)
-        cams_min = [torch.min(cams[batch_id][0]).view(1, 1, 1, 1) for batch_id in range(x.shape[0])]
+        '''cams_min = [torch.min(cams[batch_id][0]).view(1, 1, 1, 1) for batch_id in range(x.shape[0])]
         cams_min = torch.cat(cams_min, 0)
         cams_max = self.globalMaxPool(cams)
-        cams = (cams - cams_min) / (cams_max - cams_min)
+        cams = (cams - cams_min) / (cams_max - cams_min)'''
+        #cams = torch.sigmoid(cams)
         cams = F.interpolate(cams, scale_factor=32, mode='bilinear', align_corners=True)
         # cams = torch.nn.Upsample(scale_factor=32, mode='bilinear')(cams)
         return x, conv5_3_3, cams

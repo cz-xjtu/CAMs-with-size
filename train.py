@@ -89,7 +89,7 @@ def do_epoch(phase, net, device, loader, epoch, weight, optimizer=None):
         tqdm_iter.update(1)
     tqdm_iter.close()
     print(f"{desc} " + ', '.join(f"{k}={v}" for (k, v) in {'loss': f"{current_loss:.4f}", 'accuracy': f"{current_acc:.4f}"}.items()))
-    return
+    return current_acc
 
 
 if __name__ == '__main__':
@@ -158,13 +158,16 @@ if __name__ == '__main__':
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     # train and val
+    best_acc = 0.
     for i in range(args.num_epochs):
         # train and val alternatively
-        do_epoch(phase='train', net=net, device=device, loader=train_loader, epoch=i, optimizer=optimizer_ft,
-                 weight=args.weight)
+        train_acc = do_epoch(phase='train', net=net, device=device, loader=train_loader, epoch=i,
+                             optimizer=optimizer_ft, weight=args.weight)
         with torch.no_grad():
-            do_epoch(phase='val', net=net, device=device, loader=val_loader, epoch=i, weight=args.weight)
-        torch.save(net, os.path.join(args.model_save_path, "best.pkl"))
+            val_acc = do_epoch(phase='val', net=net, device=device, loader=val_loader, epoch=i, weight=args.weight)
+        if val_acc > best_acc:
+            best_acc = val_acc
+            torch.save(net, os.path.join(args.model_save_path, "best.pkl"))
 
     print('Bingo!')
 

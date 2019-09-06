@@ -557,9 +557,10 @@ class SizeConstraintLoss():
         too_small: Tensor = (value < lower_b).type(torch.float32)
 
         big_pen: Tensor = (value - upper_b) ** 2
-        small_pen: Tensor = (value - lower_b) ** 2
+        # small_pen: Tensor = (value - lower_b) ** 2
 
-        res = too_big * big_pen + too_small * small_pen
+        # res = too_big * big_pen + too_small * small_pen
+        res = too_big * big_pen
 
         loss: Tensor = res / (w * h)
 
